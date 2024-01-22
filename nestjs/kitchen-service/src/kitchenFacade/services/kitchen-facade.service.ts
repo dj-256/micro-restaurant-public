@@ -3,7 +3,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
 import { Recipe, RecipeDocument } from '../../shared/schemas/recipe.schema';
-import { Preparation, PreparationDocument } from '../../preparations/schemas/preparation.schema';
+import {
+  Preparation,
+  PreparationDocument,
+} from '../../preparations/schemas/preparation.schema';
 import { PostEnum } from '../../shared/schemas/post-enum.schema';
 
 import { RecipeWithItemToBeCookedInterface } from '../../shared/interfaces/recipe-with-item-to-be-cooked.interface';
@@ -11,19 +14,29 @@ import { RecipeWithItemToBeCookedInterface } from '../../shared/interfaces/recip
 import { ItemToBeCookedDto } from '../../preparations/dto/item-to-be-cooked.dto';
 
 import { RecipeNotFoundException } from '../exceptions/recipe-not-found.exception';
-import { PreparedItem, PreparedItemDocument } from '../../preparedItems/schemas/prepared-item.schema';
+import {
+  PreparedItem,
+  PreparedItemDocument,
+} from '../../preparedItems/schemas/prepared-item.schema';
 import { ErrorDto } from '../../shared/dto/error.dto';
+import { RecipeDto } from '../../preparations/dto/recipe.dto';
 
 @Injectable()
 export class KitchenFacadeService {
   constructor(
     @InjectModel(Recipe.name) private recipeModel: Model<RecipeDocument>,
-    @InjectModel(Preparation.name) private preparationModel: Model<PreparationDocument>,
-    @InjectModel(PreparedItem.name) private preparedItemModel: Model<PreparedItemDocument>,
+    @InjectModel(Preparation.name)
+    private preparationModel: Model<PreparationDocument>,
+    @InjectModel(PreparedItem.name)
+    private preparedItemModel: Model<PreparedItemDocument>,
   ) {}
 
-  async getRecipeFromMenuItemShortName(menuItemShortName: string): Promise<Recipe> {
-    const foundRecipe = await this.recipeModel.findOne({ shortName: menuItemShortName }).lean();
+  async getRecipeFromMenuItemShortName(
+    menuItemShortName: string,
+  ): Promise<Recipe> {
+    const foundRecipe = await this.recipeModel
+      .findOne({ shortName: menuItemShortName })
+      .lean();
 
     if (foundRecipe === null) {
       throw new RecipeNotFoundException(menuItemShortName);
@@ -32,11 +45,22 @@ export class KitchenFacadeService {
     return foundRecipe;
   }
 
-  computeMaxCookingTime(recipeWithItemToBeCookedList: RecipeWithItemToBeCookedInterface[]): number {
-    return Math.max(...recipeWithItemToBeCookedList.map((recipeWithItemToBeCooked) => (recipeWithItemToBeCooked.recipe.meanCookingTimeInSec)));
+  computeMaxCookingTime(
+    recipeWithItemToBeCookedList: RecipeWithItemToBeCookedInterface[],
+  ): number {
+    return Math.max(
+      ...recipeWithItemToBeCookedList.map(
+        (recipeWithItemToBeCooked) =>
+          recipeWithItemToBeCooked.recipe.meanCookingTimeInSec,
+      ),
+    );
   }
 
-  async createPreparedItem(shortName: string, recipe: Recipe, shouldStartAt: Date): Promise<PreparedItem> {
+  async createPreparedItem(
+    shortName: string,
+    recipe: Recipe,
+    shouldStartAt: Date,
+  ): Promise<PreparedItem> {
     const newPreparedItem: PreparedItem = new PreparedItem();
     newPreparedItem.shortName = shortName;
     newPreparedItem.recipe = recipe;
@@ -45,18 +69,30 @@ export class KitchenFacadeService {
     return await this.preparedItemModel.create(newPreparedItem);
   }
 
-  async startCookingProcess(recipeWithItemToBeCookedList: RecipeWithItemToBeCookedInterface[], maxPreparationTime: number): Promise<PreparedItem[]> {
+  async startCookingProcess(
+    recipeWithItemToBeCookedList: RecipeWithItemToBeCookedInterface[],
+    maxPreparationTime: number,
+  ): Promise<PreparedItem[]> {
     const now: Date = new Date();
-    const expectedDeliveryTime: Date = new Date(now.getTime() + maxPreparationTime * 1000);
+    const expectedDeliveryTime: Date = new Date(
+      now.getTime() + maxPreparationTime * 1000,
+    );
 
     const createPreparedItemCalls = [];
     recipeWithItemToBeCookedList.forEach((recipeWithItemToBeCooked) => {
-      for (let i = 0; i < recipeWithItemToBeCooked.itemToBeCooked.howMany; i += 1) {
+      for (
+        let i = 0;
+        i < recipeWithItemToBeCooked.itemToBeCooked.howMany;
+        i += 1
+      ) {
         createPreparedItemCalls.push(
           this.createPreparedItem(
             recipeWithItemToBeCooked.itemToBeCooked.menuItemShortName,
             recipeWithItemToBeCooked.recipe,
-            new Date(expectedDeliveryTime.getTime() - recipeWithItemToBeCooked.recipe.meanCookingTimeInSec * 1000), // start time is set to finish at expectedDeliveryTime
+            new Date(
+              expectedDeliveryTime.getTime() -
+                recipeWithItemToBeCooked.recipe.meanCookingTimeInSec * 1000,
+            ), // start time is set to finish at expectedDeliveryTime
           ),
         );
       }
@@ -65,7 +101,11 @@ export class KitchenFacadeService {
     return await Promise.all(createPreparedItemCalls);
   }
 
-  async createPreparation(tableNumber: number, preparedItems: PreparedItem[], shouldBeReadyAt: Date): Promise<Preparation> {
+  async createPreparation(
+    tableNumber: number,
+    preparedItems: PreparedItem[],
+    shouldBeReadyAt: Date,
+  ): Promise<Preparation> {
     const newPreparation: Preparation = new Preparation();
     newPreparation.tableNumber = tableNumber;
     newPreparation.preparedItems = preparedItems;
@@ -74,10 +114,13 @@ export class KitchenFacadeService {
     return await this.preparationModel.create(newPreparation);
   }
 
-  async receivePreparation(tableNumber: number, itemsToBeCooked: ItemToBeCookedDto[]): Promise<Preparation[]> {
-    const recipesCalls = itemsToBeCooked.map((itemToBeCooked) => (
-      this.getRecipeFromMenuItemShortName(itemToBeCooked.menuItemShortName)
-    ));
+  async receivePreparation(
+    tableNumber: number,
+    itemsToBeCooked: ItemToBeCookedDto[],
+  ): Promise<Preparation[]> {
+    const recipesCalls = itemsToBeCooked.map((itemToBeCooked) =>
+      this.getRecipeFromMenuItemShortName(itemToBeCooked.menuItemShortName),
+    );
 
     const recipes: Recipe[] = await Promise.all(recipesCalls);
 
@@ -97,25 +140,48 @@ export class KitchenFacadeService {
 
     if (byPost[PostEnum.BAR]?.length > 0) {
       const maxTime = this.computeMaxCookingTime(byPost[PostEnum.BAR]);
-      const preparedItems: PreparedItem[] = await this.startCookingProcess(byPost[PostEnum.BAR], maxTime);
-      const preparation: Preparation = await this.createPreparation(tableNumber, preparedItems, new Date(now.getTime() + maxTime * 1000));
+      const preparedItems: PreparedItem[] = await this.startCookingProcess(
+        byPost[PostEnum.BAR],
+        maxTime,
+      );
+      const preparation: Preparation = await this.createPreparation(
+        tableNumber,
+        preparedItems,
+        new Date(now.getTime() + maxTime * 1000),
+      );
       newPreparations.push(preparation);
     }
 
     const coldDishList = byPost[PostEnum.COLD_DISH] || [];
     const hotDishList = byPost[PostEnum.HOT_DISH] || [];
-    if ((coldDishList.length + hotDishList.length) > 0) {
-      const maxTime = this.computeMaxCookingTime([].concat(coldDishList, hotDishList));
+    if (coldDishList.length + hotDishList.length > 0) {
+      const maxTime = this.computeMaxCookingTime(
+        [].concat(coldDishList, hotDishList),
+      );
 
       if (coldDishList.length > 0) {
-        const preparedItems: PreparedItem[] = await this.startCookingProcess(coldDishList, maxTime);
-        const preparation: Preparation = await this.createPreparation(tableNumber, preparedItems, new Date(now.getTime() + maxTime * 1000));
+        const preparedItems: PreparedItem[] = await this.startCookingProcess(
+          coldDishList,
+          maxTime,
+        );
+        const preparation: Preparation = await this.createPreparation(
+          tableNumber,
+          preparedItems,
+          new Date(now.getTime() + maxTime * 1000),
+        );
         newPreparations.push(preparation);
       }
 
       if (hotDishList.length > 0) {
-        const preparedItems: PreparedItem[] = await this.startCookingProcess(hotDishList, maxTime);
-        const preparation: Preparation = await this.createPreparation(tableNumber, preparedItems, new Date(now.getTime() + maxTime * 1000));
+        const preparedItems: PreparedItem[] = await this.startCookingProcess(
+          hotDishList,
+          maxTime,
+        );
+        const preparation: Preparation = await this.createPreparation(
+          tableNumber,
+          preparedItems,
+          new Date(now.getTime() + maxTime * 1000),
+        );
         newPreparations.push(preparation);
       }
     }
@@ -124,19 +190,48 @@ export class KitchenFacadeService {
   }
 
   async checkAndUpdatePreparation(preparedItem: PreparedItem) {
-    const preparationsFromPreparedItem: Preparation[] = await this.preparationModel.find({ 'completedAt': { $eq: null }, 'preparedItems': preparedItem._id }).populate({
-      path: 'preparedItems',
-      select: { recipe: 0 },
-    }).exec();
+    const preparationsFromPreparedItem: Preparation[] =
+      await this.preparationModel
+        .find({ completedAt: { $eq: null }, preparedItems: preparedItem._id })
+        .populate({
+          path: 'preparedItems',
+          select: { recipe: 0 },
+        })
+        .exec();
 
-    if (preparationsFromPreparedItem.length === 0 || preparationsFromPreparedItem.length > 1) {
-      throw new ErrorDto(HttpStatus.INTERNAL_SERVER_ERROR, `The Prepared Item with Id ${preparedItem._id} should be linked to at least and only one Preparation.`);
+    if (
+      preparationsFromPreparedItem.length === 0 ||
+      preparationsFromPreparedItem.length > 1
+    ) {
+      throw new ErrorDto(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        `The Prepared Item with Id ${preparedItem._id} should be linked to at least and only one Preparation.`,
+      );
     }
 
     const preparation: Preparation = preparationsFromPreparedItem[0];
 
-    if (preparation.preparedItems.every((preparationPreparedItem) => (preparationPreparedItem.finishedAt !== null))) {
-      await this.preparationModel.findByIdAndUpdate(preparation._id, { completedAt: new Date(preparedItem.finishedAt) }, { returnDocument: 'after' });
+    if (
+      preparation.preparedItems.every(
+        (preparationPreparedItem) =>
+          preparationPreparedItem.finishedAt !== null,
+      )
+    ) {
+      await this.preparationModel.findByIdAndUpdate(
+        preparation._id,
+        { completedAt: new Date(preparedItem.finishedAt) },
+        { returnDocument: 'after' },
+      );
     }
+  }
+
+  async addNewRecipe(recipeDto: RecipeDto): Promise<Recipe> {
+    const newRecipe: Recipe = new Recipe();
+    newRecipe.shortName = recipeDto.shortName;
+    newRecipe.post = recipeDto.post as PostEnum;
+    newRecipe.cookingSteps = recipeDto.cookingSteps;
+    newRecipe.meanCookingTimeInSec = recipeDto.meanCookingTimeInSec;
+
+    return await this.recipeModel.create(newRecipe);
   }
 }
