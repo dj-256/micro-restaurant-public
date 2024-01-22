@@ -10,6 +10,7 @@ import { PreparationsService } from './services/preparations.service';
 import { DiningProxyService } from './services/dining-proxy.service';
 
 import { KitchenFacadeModule } from '../kitchenFacade/kitchen-facade.module';
+import { RecipesController } from './controllers/recipes.controller';
 
 @Module({
   imports: [
@@ -20,10 +21,7 @@ import { KitchenFacadeModule } from '../kitchenFacade/kitchen-facade.module';
     HttpModule,
     KitchenFacadeModule,
   ],
-  controllers: [PreparationsController],
-  providers: [
-    PreparationsService,
-    DiningProxyService,
-  ],
+  controllers: [PreparationsController, RecipesController],
+  providers: [PreparationsService, DiningProxyService],
 })
 export class PreparationsModule {}
